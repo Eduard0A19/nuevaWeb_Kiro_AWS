@@ -70,6 +70,64 @@ async function inBatches(items, size, fn) {
   for (let i = 0; i < items.length; i += size) await Promise.all(items.slice(i, i + size).map(fn));
 }
 
+/* ---------- Voz femenina (Web Speech API del navegador) ---------- */
+const Voice = (() => {
+  const synth = 'speechSynthesis' in window ? window.speechSynthesis : null;
+  const FEMALE = /helena|sabina|laura|elvira|dalia|paulina|monica|m[óo]nica|luc[íi]a|elena|marisol|esperanza|female|mujer|google espa[ñn]ol/i;
+  const MALE = /pablo|raul|ra[úu]l|jorge|alvaro|[áa]lvaro|diego|juan|carlos|andres|andr[ée]s|male\b|hombre/i;
+  let voice = null, on = localStorage.getItem('pdx:voice') !== 'off';
+
+  function pick() {
+    const all = synth ? synth.getVoices() : [];
+    const es = all.filter(v => /^es/i.test(v.lang));
+    const rank = v => (FEMALE.test(v.name) ? 0 : MALE.test(v.name) ? 9 : 4) +
+      (/natural|online/i.test(v.name) ? -1 : 0) + (/^es[-_]ES/i.test(v.lang) ? 0 : 1);
+    voice = es.sort((a, b) => rank(a) - rank(b))[0] || null;
+  }
+  if (synth) { pick(); synth.addEventListener?.('voiceschanged', pick); }
+
+  function stop() { synth?.cancel(); }
+  function say(text, force) {
+    if (!synth || (!on && !force) || !text) return;
+    stop();
+    // Se trocea por frases: Chrome corta los textos largos.
+    (text.match(/[^.!?;]+[.!?;]?/g) || [text]).map(s => s.trim()).filter(Boolean).forEach(part => {
+      const u = new SpeechSynthesisUtterance(part);
+      u.lang = voice?.lang || 'es-ES';
+      if (voice) u.voice = voice;
+      // Si solo hay voz masculina o desconocida, se sube el tono para sonar femenina.
+      u.pitch = voice && FEMALE.test(voice.name) ? 1.05 : 1.35;
+      u.rate = 0.97;
+      synth.speak(u);
+    });
+  }
+  function toggle() {
+    on = !on;
+    localStorage.setItem('pdx:voice', on ? 'on' : 'off');
+    if (!on) stop();
+    return on;
+  }
+  return { say, stop, toggle, get on() { return on; }, supported: !!synth };
+})();
+
+function speechText() {
+  const { id, p, species } = cur();
+  const name = es(species.names) || cap(p.name);
+  const types = p.types.sort((a, b) => a.slot - b.slot).map(t => TYPES_ES[t.type.name]);
+  const fl = flavors(species);
+  const f = fl[fl.length - 1];
+  const fmt = n => String(n).replace('.', ',');
+  const genus = (es(species.genera, 'genus') || '').replace(/^Pokémon\s*/i, '');
+  return [
+    `${name}, Pokémon número ${id}.`,
+    genus ? `Es el Pokémon ${genus}.` : '',
+    `Es de tipo ${types.join(' y ')}.`,
+    `Mide ${fmt(p.height / 10)} metros y pesa ${fmt(p.weight / 10)} kilos.`,
+    species.is_legendary ? 'Es un Pokémon legendario.' : species.is_mythical ? 'Es un Pokémon singular.' : '',
+    f ? f.text : '',
+  ].filter(Boolean).join(' ');
+}
+
 /* ---------- Estado ---------- */
 const state = {
   list: [],                 // [{id, en, es, types[]}]
@@ -212,6 +270,10 @@ function bindEvents() {
     renderGrid();
   });
   $('#random').addEventListener('click', () => openPokemon(1 + Math.floor(Math.random() * TOTAL)));
+  const vbtn = $('#voice');
+  const paintVoice = () => { vbtn.setAttribute('aria-pressed', Voice.on); vbtn.textContent = `🗣️ Voz: ${Voice.on ? 'sí' : 'no'}`; };
+  if (!Voice.supported) { vbtn.disabled = true; vbtn.title = 'Tu navegador no admite voz'; vbtn.textContent = '🗣️ Sin voz'; }
+  else { paintVoice(); vbtn.addEventListener('click', () => { Voice.toggle(); paintVoice(); }); }
   $('#grid').addEventListener('click', e => {
     const c = e.target.closest('.card');
     if (c) openPokemon(Number(c.dataset.id));
@@ -219,7 +281,7 @@ function bindEvents() {
 
   const modal = $('#modal');
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
-  modal.addEventListener('close', () => { if (location.hash) history.replaceState(null, '', location.pathname + location.search); state.cur = null; });
+  modal.addEventListener('close', () => { Voice.stop(); if (location.hash) history.replaceState(null, '', location.pathname + location.search); state.cur = null; });
   modal.addEventListener('keydown', e => {
     if (!state.cur || e.target.matches('input, select')) return;
     if (e.key === 'ArrowRight') go(1);
@@ -247,6 +309,7 @@ async function openPokemon(id, keepTab = false) {
   const modal = $('#modal');
   if (!keepTab) { state.tab = 'info'; state.shiny = false; }
   state.flavorIdx = null;
+  Voice.stop();
   if (!modal.open) modal.showModal();
   $('#sheet').innerHTML = `<div class="pane loading">Cargando #${pad(id)}…</div>`;
   history.replaceState(null, '', `#${id}`);
@@ -258,6 +321,7 @@ async function openPokemon(id, keepTab = false) {
     renderSheet();
     $('#modal').scrollTop = 0;
     $('#sheet').scrollTop = 0;
+    Voice.say(speechText());
   } catch (e) {
     $('#sheet').innerHTML = `<div class="pane"><p>No se pudo cargar este Pokémon.</p><button class="btn" data-act="close">Cerrar</button></div>`;
   }
@@ -294,6 +358,7 @@ function renderSheet() {
         <div class="tools">
           <button class="btn" data-act="shiny" aria-pressed="${state.shiny}">✨ Variocolor</button>
           ${p.cries?.latest ? '<button class="btn" data-act="cry">🔊 Grito</button>' : ''}
+          ${Voice.supported ? '<button class="btn" data-act="speak">🗣️ Escuchar</button><button class="btn" data-act="hush" aria-label="Callar la voz">⏹</button>' : ''}
         </div>
       </div>
       <div>
@@ -531,6 +596,8 @@ function onSheetClick(e) {
     case 'next': go(1); break;
     case 'shiny': state.shiny = !state.shiny; renderSheet(); break;
     case 'cry': new Audio(cur().p.cries.latest).play().catch(() => {}); break;
+    case 'speak': Voice.say(speechText(), true); break;
+    case 'hush': Voice.stop(); break;
   }
 }
 function onSheetChange(e) {
