@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pokédex · Primera generación</title>
+  <meta name="description" content="Pokédex interactiva con los 151 Pokémon de la primera generación: tipos, estadísticas, naturalezas, evoluciones y movimientos.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23e63946'/%3E%3Cpath d='M4 50h92a46 46 0 0 1-92 0z' fill='%23fff'/%3E%3Ccircle cx='50' cy='50' r='13' fill='%23fff' stroke='%23222' stroke-width='6'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="ball" aria-hidden="true"></span>
+      <div>
+        <h1>Pokédex</h1>
+        <p>Primera generación · 151 Pokémon</p>
+      </div>
+    </div>
+    <div class="controls">
+      <input id="q" type="search" placeholder="Buscar por nombre o número…" autocomplete="off" aria-label="Buscar Pokémon">
+      <select id="sort" aria-label="Ordenar">
+        <option value="num">Nº Pokédex</option>
+        <option value="name">Nombre (A-Z)</option>
+        <option value="total">Estadísticas totales</option>
+      </select>
+      <button id="random" type="button" title="Pokémon aleatorio">🎲 Al azar</button>
+    </div>
+  </header>
+
+  <nav id="types" class="type-filter" aria-label="Filtrar por tipo"></nav>
+
+  <main>
+    <p id="count" class="count" aria-live="polite"></p>
+    <section id="grid" class="grid" aria-label="Lista de Pokémon"></section>
+    <p id="empty" class="empty" hidden>No se encontró ningún Pokémon.</p>
+    <p id="error" class="empty" hidden></p>
+  </main>
+
+  <dialog id="modal" aria-label="Ficha del Pokémon">
+    <div id="sheet"></div>
+  </dialog>
+
+  <footer>
+    Datos: <a href="https://pokeapi.co" target="_blank" rel="noopener">PokéAPI</a> · Imágenes: repositorio PokéAPI/sprites ·
+    Pokémon es marca de Nintendo / Game Freak. Proyecto sin ánimo de lucro.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
